@@ -4,14 +4,16 @@ from git import Repo
 
 def get_client():
     token = os.getenv("GITHUB_TOKEN")
-    auth = Auth.Token(token)
+    auth = Auth.Token(token) # type: ignore
     return Github(auth=auth)
 
-def list_repos(include_forks=False, include_archived=False):
+def list_repos(include_forks=False, include_archived=False, allowed_names=None):
     gh = get_client()
     user = gh.get_user()
     repos = []
     for repo in user.get_repos():
+        if allowed_names is not None and repo.name not in allowed_names:
+            continue
         if repo.fork and not include_forks:
             continue
         if repo.archived and not include_archived:
