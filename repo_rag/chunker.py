@@ -1,5 +1,4 @@
 import os
-import json
 from dataclasses import dataclass
 from tree_sitter_languages import get_parser
 
@@ -20,7 +19,6 @@ EXTENSION_TO_LANG = {
     ".cs": "c_sharp",
     ".sh": "bash",
 }
-
 
 CHUNK_NODE_TYPES = {
     "python": {"function_definition"},
@@ -89,7 +87,7 @@ def treesitter_chunks(text, repo, file_path, language, commit_sha):
                 start_line=start_line, end_line=end_line,
                 code=code, commit_sha=commit_sha,
             ))
-            return  
+            return
         for child in node.children:
             walk(child)
 
@@ -139,7 +137,7 @@ def chunk_file(file_path, repo_name, repo_root, commit_sha):
             if chunks:
                 return chunks
         except Exception:
-            pass  
+            pass
 
     fallback_language = language or ext.lstrip(".")
     return sliding_window_chunks(text, repo_name, rel_path, fallback_language, commit_sha)
