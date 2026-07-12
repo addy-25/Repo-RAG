@@ -21,8 +21,7 @@ EXTENSION_TO_LANG = {
     ".sh": "bash",
 }
 
-# Only "function-like" node types — classes aren't boundaries themselves,
-# their methods get picked up individually as we walk through them.
+
 CHUNK_NODE_TYPES = {
     "python": {"function_definition"},
     "javascript": {"function_declaration", "method_definition"},
@@ -90,7 +89,7 @@ def treesitter_chunks(text, repo, file_path, language, commit_sha):
                 start_line=start_line, end_line=end_line,
                 code=code, commit_sha=commit_sha,
             ))
-            return  # don't descend into a function's own nested closures
+            return  
         for child in node.children:
             walk(child)
 
@@ -140,7 +139,7 @@ def chunk_file(file_path, repo_name, repo_root, commit_sha):
             if chunks:
                 return chunks
         except Exception:
-            pass  # fall through to sliding window
+            pass  
 
     fallback_language = language or ext.lstrip(".")
     return sliding_window_chunks(text, repo_name, rel_path, fallback_language, commit_sha)
