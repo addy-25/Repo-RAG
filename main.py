@@ -39,7 +39,27 @@ sample = all_chunks[0]
 print(f"\nsample: {sample.repo}/{sample.file_path}:{sample.start_line}-{sample.end_line} [{sample.chunk_type}] {sample.name}")
 print(sample.code[:300])
 
-print("\nembedding a small sample to verify...")
-for chunk in all_chunks[:3]:
-    vec = embed_text(chunk.code)
-    print(f"{chunk.repo}/{chunk.file_path} [{chunk.name}] -> {len(vec)} dims")
+import time
+from repo_rag.store import get_collection, add_chunks
+
+collection = get_collection()
+
+print(f"\nembedding and storing {len(all_chunks)} chunks...")
+BATCH_SIZE = 25
+for i in range(0, len(all_chunks), BATCH_SIZE):
+    batch = all_chunks[i:i + BATCH_SIZE]
+    embeddings = []
+    valid_chunks = []
+    for chunk in batch:
+        try:
+            vec = embed_text(chunk.code)
+            embeddings.append(vec)
+            valid_chunks.append(chunk)
+        except Exception as e:
+            print(f"skipping {chunk.repo}/{chunk.file_path}:{chunk.start_line} ({e})")
+        time.sleep(0.3)
+    if valid_chunks:
+        add_chunks(collection, valid_chunks, embeddings)
+    print(f"  indexed {min(i + BATCH_SIZE, len(all_chunks))}/{len(all_chunks)}")
+
+print(f"\ndone. collection now has {collection.count()} chunks.")
