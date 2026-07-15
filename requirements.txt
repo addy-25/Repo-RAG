@@ -1,0 +1,10 @@
+PyGithub==2.9.1
+GitPython==3.1.50
+tree-sitter==0.26.0
+tree-sitter-languages==1.10.2
+chromadb==1.5.9
+rank-bm25==0.2.2
+google-genai==2.11.0
+python-dotenv==1.2.2
+typer==0.26.8
+streamlit==1.59.2
