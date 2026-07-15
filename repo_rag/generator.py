@@ -32,3 +32,46 @@ def ask(question, retriever, k=6):
         config=types.GenerateContentConfig(temperature=0.2),
     )
     return response.text, chunks
+
+
+def rewrite_query(question, history, client):
+    # first turn — nothing to rewrite against
+    if not history:
+        return question
+
+    convo = "\n".join(f"{m['role']}: {m['content']}" for m in history[-6:])
+    prompt = f"""Given the conversation history and a follow-up question, rewrite the \
+follow-up into a standalone question that makes sense on its own, without the history. \
+Resolve pronouns and vague references ("it", "that", "the sell side") using the history. \
+If the question is already standalone, return it unchanged. \
+Output ONLY the rewritten question — no preamble, no explanation.
+
+Conversation:
+{convo}
+
+Follow-up question: {question}
+
+Standalone question:"""
+
+    resp = client.models.generate_content(
+        model=GEN_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(temperature=0.0),
+    )
+    return resp.text.strip()
+
+
+def chat(question, retriever, history, k=6):
+    client = genai.Client(api_key=os.getenv("GOOGLE_API_KEY"))
+    standalone = rewrite_query(question, history, client)
+
+    chunks = retriever.search(standalone, k=k)
+    context = build_context(chunks)
+    prompt = f"{SYSTEM_PROMPT}\n\nContext:\n{context}\n\nQuestion: {standalone}\n\nAnswer:"
+
+    response = client.models.generate_content(
+        model=GEN_MODEL,
+        contents=prompt,
+        config=types.GenerateContentConfig(temperature=0.2),
+    )
+    return response.text, chunks, standalone

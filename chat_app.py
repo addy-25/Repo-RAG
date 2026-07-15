@@ -1,11 +1,10 @@
 import streamlit as st
 from dotenv import load_dotenv
-from repo_rag.generator import chat
 
 load_dotenv()
 
 from repo_rag.retriever import HybridRetriever
-from repo_rag.generator import ask
+from repo_rag.generator import chat
 
 st.set_page_config(page_title="Ask My Repos", page_icon="🔍")
 st.title("🔍 Ask My Repos")
@@ -26,13 +25,16 @@ for msg in st.session_state.messages:
 
 # handle a new question
 if prompt := st.chat_input("Ask about your repos..."):
+    history = list(st.session_state.messages)  # snapshot BEFORE adding this turn
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
     with st.chat_message("assistant"):
         with st.spinner("Searching your code..."):
-            answer, chunks = ask(prompt, retriever)
+            answer, chunks, standalone = chat(prompt, retriever, history)
+        if standalone.strip() != prompt.strip():
+            st.caption(f"🔎 Interpreted as: *{standalone}*")
         st.markdown(answer)
         with st.expander("Sources"):
             for c in chunks:
