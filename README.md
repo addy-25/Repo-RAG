@@ -40,19 +40,35 @@ flowchart LR
 
 ## Design decisions
 
-**Chunking by function/method boundary, not character count** — each file is parsed into an AST via `tree-sitter`; the chunker walks the tree and extracts each function/method as its own chunk (recursing through classes so methods are captured individually, without ever treating a whole class as one blob). Files with no parseable functions (`.md`, unsupported languages, parse failures) fall back to a 50-line sliding window with 10-line overlap. This is the single decision with the most impact on retrieval quality — a naive split can bisect a function; this can't.
+Each choice below is a talking point in its own right; the one-line summary is the takeaway, the sentence after it is the reasoning.
 
-**Hybrid retrieval (dense + BM25), merged by rank not score** — dense vector search finds semantic matches ("how are orders matched" → matching engine code, even without the word "matched"); BM25 keyword search finds exact identifiers dense search blurs (`MatchOrder`, `crm_status`). Both run per query and merge via **Reciprocal Rank Fusion**, which combines by rank position rather than raw score — necessary because cosine similarity (~0–1) and BM25 scores (unbounded) live on incompatible scales that can't be averaged directly.
+### AST-based chunking
+Chunks are split at function/method boundaries via `tree-sitter`, so a chunk is always a whole function — never bisected mid-body like a character-count split would be.
+Files with no parseable functions (Markdown, unsupported languages) fall back to a 50-line sliding window. This is the single biggest lever on retrieval quality.
 
-**Asymmetric embeddings** — chunks are embedded at index time with `task_type=RETRIEVAL_DOCUMENT`; questions are embedded at query time with `task_type=RETRIEVAL_QUERY`. Same model, different declared role — Gemini's embedding model is trained to place these two types of text closer together than a symmetric embedding would.
+### Hybrid retrieval, merged by rank
+Dense vector search catches meaning ("how are orders matched" → matching-engine code); BM25 keyword search catches exact identifiers dense search blurs (`MatchOrder`, `crm_status`).
+Results merge via **Reciprocal Rank Fusion** — by rank position, not raw score, because cosine similarity (~0–1) and BM25 (unbounded) can't be averaged on the same scale.
 
-**Per-line-numbered context for generation** — retrieved chunks are annotated with their real source line number on every line before being handed to the model, and the system prompt forces inline citations. Without this, the model estimates line numbers by position within the chunk rather than citing the real ones — a subtle but real form of citation hallucination that showed up during development and was fixed by grounding every line explicitly.
+### Asymmetric embeddings
+Chunks are indexed as `RETRIEVAL_DOCUMENT`, questions embedded as `RETRIEVAL_QUERY`.
+Same model, different declared role — trained to pull a question and its answer chunk closer than a symmetric embedding would.
 
-**Incremental re-indexing at repo granularity** — `index_manifest.json` tracks each repo's last-indexed commit SHA. An unchanged repo is skipped entirely (a no-op run completes in ~7 seconds vs. several minutes for a full index); a changed repo has all of its existing chunks deleted and fully rebuilt from scratch. Granularity is per-repo rather than per-file — a deliberate scope tradeoff (some redundant re-embedding of unchanged files within a changed repo) in exchange for a much simpler, always-correct implementation with no risk of orphaned chunks left behind by deleted or renamed functions.
+### Line-numbered generation context
+Every retrieved line is prefixed with its real source line number before the model sees it, and the prompt forces inline citations.
+Without this, the model guesses line numbers by position within the chunk — a subtle citation hallucination that this grounds out entirely.
 
-**Measured, not assumed, retrieval quality** — `eval.py` runs 18 hand-written questions with known-correct source files through the retriever and reports retrieval@5. This surfaced a genuine, reproducible finding: both `auth.py` files (FeedFlow and Gravitas) miss on "authentication" queries, because the code says `token`/`jwt`/`verify_user` rather than the literal word, while each repo's README has an `## Authentication` heading that wins on both semantic and keyword signals. Not a bug fixed by tuning — a documented, systematic vocabulary-mismatch limitation of hybrid retrieval.
+### Incremental re-indexing
+`index_manifest.json` tracks each repo's last-indexed commit SHA: unchanged repos are skipped (~7s no-op run), changed repos are wiped and rebuilt.
+Granularity is per-repo, not per-file — a deliberate simplicity/correctness tradeoff that guarantees no orphaned chunks from deleted or renamed functions.
 
-**Everything runs on free-tier APIs** — no billing enabled anywhere. This shaped real implementation details: retry/backoff tuned differently for rate-limit errors (429) vs. other transient failures, resumable indexing so a rate limit mid-run doesn't lose progress, and generation/embedding model names verified directly against the API's model list rather than trusted from documentation (`gemini-2.0-flash` turned out to have zero free-tier quota on this project despite being a valid model name; `text-embedding-004` had been retired entirely).
+### Measured retrieval quality
+`eval.py` scores retrieval@5 over 18 known-answer questions instead of relying on vibes.
+It surfaced a reproducible finding: "authentication" queries miss both `auth.py` files (whose code says `token`/`jwt`, not the literal word) while each README's `## Authentication` heading wins — a documented vocabulary-mismatch limitation, not a bug.
+
+### Free-tier only
+No billing enabled anywhere, which shaped real implementation details.
+429-specific backoff, resumable indexing, and model names verified against the live API — `gemini-2.0-flash` had zero free-tier quota despite being valid, and `text-embedding-004` was retired entirely.
 
 ## Project structure
 
