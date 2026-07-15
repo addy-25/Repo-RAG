@@ -5,7 +5,7 @@ from repo_rag.embedder import embed_text
 
 
 def tokenize(text):
-    # split on non-alphanumerics; keeps identifiers like getUserById whole
+    
     return [t for t in re.split(r"\W+", text.lower()) if t]
 
 

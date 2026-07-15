@@ -3,3 +3,4 @@ repos/
 venv/
 __pycache__/
 chroma_db/
+index_manifest.json
