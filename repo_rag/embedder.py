@@ -20,7 +20,7 @@ def embed_text(text, task_type="RETRIEVAL_DOCUMENT", retries=3):
                 contents=text,
                 config=types.EmbedContentConfig(task_type=task_type),
             )
-            return result.embeddings[0].values
+            return result.embeddings[0].values # type: ignore
         except Exception as e:
             wait = 5 * (attempt + 1)
             print(f"embed failed ({e}), retrying in {wait}s...")
